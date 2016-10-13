@@ -15,6 +15,8 @@ module.exports = {
         return '/' + file.split('.')[0] + path;
     },
 
+    responseBuilder: require('./response-builder'),
+
     setup (servername, version, port, routesDirectory, functionsDirectory) {
         const context = this;
         const server = restify.createServer({
@@ -51,7 +53,7 @@ module.exports = {
                                 path: routePath,
                                 method: route.method,
                                 route: server[route.method](routePath, (req, res) => {
-                                    const functionResult = _.find(context._functions, {name: context._concatPath(file, route.functionName)}).func(req.params, req.body);
+                                    const functionResult = _.find(context._functions, {name: context._concatPath(file, route.functionName)}).func(req.params || {}, req.body || {});
 
                                     if (typeof functionResult.then === 'function') {
                                         functionResult.then((result) => {
