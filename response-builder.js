@@ -17,7 +17,7 @@ module.exports = {
 
         let result = JSON.stringify(template);
 
-        _.each(values, (value, key) => {
+        _.forEach(values, (value, key) => {
             result = result.replace(new RegExp('"' + key + '"', 'g'), JSON.stringify(value));
         });
 

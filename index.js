@@ -2,7 +2,7 @@
 
 const restify = require('restify');
 const bluebird = require('bluebird');
-const fs = require('fs');
+const fs = bluebird.promisifyAll(require('fs'));
 const _ = require('lodash');
 const join = require('path').join;
 
@@ -11,7 +11,7 @@ module.exports = {
 
     _functions: [],
 
-    _concatPath (file, path) {
+    _prepareURL (file, path) {
         return '/' + file.split('.')[0] + path;
     },
 
@@ -29,46 +29,39 @@ module.exports = {
         server.use(restify.bodyParser());
 
         this._loadFunctions(functionsDirectory).then(()=> {
-            context._loadRoutes(server, routesDirectory).then(()=> {
-                server.listen(port, () => {
-                    console.log('%s listening at %s', server.name, server.url);
-                });
+            return context._loadRoutes(server, routesDirectory);
+        }).then(()=> {
+            server.listen(port, () => {
+                console.log('%s listening at %s', server.name, server.url);
             });
         });
     },
 
     _loadRoutes (server, routesDirectory)  {
         const context = this;
-        return new bluebird((resolve, reject) => {
-            fs.readdir(routesDirectory, (err, files)=> {
-                if (err) {
-                    reject(err);
-                } else {
-                    _.each(files, (file) => {
-                        const routes = require(join(routesDirectory, file));
 
-                        _.each(routes, (route) => {
-                            const routePath = context._concatPath(file, route.path);
-                            context._routes.push({
-                                path: routePath,
-                                method: route.method,
-                                route: server[route.method](routePath, (req, res) => {
-                                    const functionResult = _.find(context._functions, {name: context._concatPath(file, route.functionName)}).func(req.params || {}, req.body || {});
+        return fs.readdirAsync(routesDirectory).then((files)=> {
+            _.forEach(files, (file) => {
+                const routes = require(join(routesDirectory, file));
 
-                                    if (typeof functionResult.then === 'function') {
-                                        functionResult.then((result) => {
-                                            res.json(200, result);
-                                        });
-                                    } else {
-                                        res.json(200, functionResult);
-                                    }
-                                })
-                            });
-                        });
+                _.forEach(routes, (route) => {
+                    const routePath = context._prepareURL(file, route.path);
+                    context._routes.push({
+                        path: routePath,
+                        method: route.method,
+                        route: server[route.method](routePath, (req, res) => {
+                            const functionResult = _.find(context._functions, {name: context._prepareURL(file, route.functionName)}).func(req.params || {}, req.body || {});
+
+                            if (typeof functionResult.then === 'function') {
+                                functionResult.then((result) => {
+                                    res.json(200, result);
+                                });
+                            } else {
+                                res.json(200, functionResult);
+                            }
+                        })
                     });
-
-                    resolve();
-                }
+                });
             });
         });
     },
@@ -76,24 +69,15 @@ module.exports = {
     _loadFunctions (functionsDirectory) {
         const context = this;
 
-        return new bluebird((resolve, reject) => {
-            fs.readdir(functionsDirectory, (err, files)=> {
-                if (err) {
-                    reject(err);
-                } else {
-                    _.each(files, (file) => {
-                        const functions = require(join(functionsDirectory, file));
-
-                        _.each(functions, (func) => {
-                            context._functions.push({
-                                name: context._concatPath(file, func.name),
-                                func: func.func
-                            });
-                        });
+        return fs.readdirAsync(functionsDirectory).then((files)=> {
+            _.forEach(files, (file) => {
+                const functions = require(join(functionsDirectory, file));
+                _.forEach(functions, (func) => {
+                    context._functions.push({
+                        name: context._prepareURL(file, func.name),
+                        func: func.func
                     });
-
-                    resolve();
-                }
+                });
             });
         });
     }
